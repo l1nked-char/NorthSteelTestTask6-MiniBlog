@@ -5,19 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b4ef37c8-e8bd-4c13-a761-f5690fa44577" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/tests/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/conftest.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/pytest.ini" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_app_auth.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_app_comments.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_app_posts.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_config.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_models.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_queries.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/schema.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/app.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/models.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/queries.py" beforeDir="false" afterPath="$PROJECT_DIR$/api/queries.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/conftest.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/conftest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/pytest.ini" beforeDir="false" afterPath="$PROJECT_DIR$/tests/pytest.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_app_auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_app_auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_app_comments.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_app_comments.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_app_posts.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_app_posts.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_config.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/test_models.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_models.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -135,7 +131,7 @@
       <workItem from="1770120976394" duration="15861000" />
       <workItem from="1770153504999" duration="4385000" />
       <workItem from="1770204031883" duration="33300000" />
-      <workItem from="1770277526358" duration="12955000" />
+      <workItem from="1770277526358" duration="13979000" />
     </task>
     <servers />
   </component>
