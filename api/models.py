@@ -28,10 +28,13 @@ class PostUpdate(BaseModel):
 
 class CommentCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
-
+    is_private: bool = Field(False, description="Приватный комментарий виден только автору поста и модерации")
 
 class CommentUpdate(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+
+class CommentStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(PENDING|PUBLISHED|DELETED)$")
 
 
 class UserCreate(BaseModel):

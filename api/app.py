@@ -6,7 +6,7 @@ from api.queries import call_func
 from fastapi.params import Depends
 from fastapi import FastAPI, HTTPException, status, Path, Query
 from typing import Optional
-from api.models import PostCreate, PostUpdate, CommentCreate, CommentUpdate, ChangeUserPassword
+from api.models import PostCreate, PostUpdate, CommentCreate, CommentUpdate, ChangeUserPassword, CommentStatusUpdate
 from jose import jwt, JWTError
 from api.config import Config
 
@@ -164,38 +164,38 @@ async def login_user(user_data: OAuth2PasswordRequestForm = Depends()):
             content={"message": "Произошла непредвиденная ошибка!", "status": "failed"}
         )
 
-@app.post("/auth/reset-password")
-async def change_user_password(change_password: ChangeUserPassword, current_user: dict = Depends(get_current_user)): # смена пароля
-    try:
-        is_changed: bool = await call_func(
-            "change_password",
-            current_user["role"],
-            current_user["user_id"],
-            change_password.old_password,
-            change_password.new_password
-        )
-
-        if is_changed:
-            return JSONResponse(
-                status_code=200,
-                content={"message": "Пароль успешно изменён", "status": "success"}
-            )
-        else:
-            return JSONResponse(
-                status_code=400,
-                content={"message": "Не удалось изменить пароль", "status": "failed"}
-            )
-    except psycopg2.Error as error:
-        return JSONResponse(
-            status_code=400,
-            content={"message": str(error), "status": "failed"}
-        )
-    except Exception as error:
-        print(str(error))
-        return JSONResponse(
-            status_code=500,
-            content={"message": "Ошибка обработки данных!", "status": "failed"}
-        )
+# @app.post("/auth/reset-password")
+# async def change_user_password(change_password: ChangeUserPassword, current_user: dict = Depends(get_current_user)): # смена пароля
+#     try:
+#         is_changed: bool = await call_func(
+#             "change_password",
+#             current_user["role"],
+#             current_user["user_id"],
+#             change_password.old_password,
+#             change_password.new_password
+#         )
+#
+#         if is_changed:
+#             return JSONResponse(
+#                 status_code=200,
+#                 content={"message": "Пароль успешно изменён", "status": "success"}
+#             )
+#         else:
+#             return JSONResponse(
+#                 status_code=400,
+#                 content={"message": "Не удалось изменить пароль", "status": "failed"}
+#             )
+#     except psycopg2.Error as error:
+#         return JSONResponse(
+#             status_code=400,
+#             content={"message": str(error), "status": "failed"}
+#         )
+#     except Exception as error:
+#         print(str(error))
+#         return JSONResponse(
+#             status_code=500,
+#             content={"message": "Ошибка обработки данных!", "status": "failed"}
+#         )
 
 
 # управление постами
@@ -515,28 +515,30 @@ async def publish_post(
 
 # управление комментариями
 
-@app.get("/posts/{post_id}/comments", response_model=dict)
+@app.get("/posts/{post_id}/comments", response_model=dict) # ++++++++++++++++++
 async def get_post_comments(
         post_id: int = Path(..., gt=0),
         skip: int = Query(0, ge=0),
         limit: int = Query(10, ge=1, le=100),
-        current_user: Optional[dict] = Depends(get_current_user)
+        current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     """
     Получение комментариев к посту.
     - Публичные посты: все видят опубликованные комментарии
-    - Неопубликованные комментарии видят только их авторы и модерация
+    - Приватные комментарии видят только автор поста и модерация
     """
     try:
+        user_id = current_user.get("user_id") if current_user else None
+
         comments = await call_func(
             "get_post_comments",
             post_id,
-            current_user["user_id"],
+            user_id,
             skip,
             limit
         )
 
-        return comments
+        return {"comments": comments}
 
     except HTTPException:
         raise
@@ -552,7 +554,8 @@ async def get_post_comments(
             detail="Internal server error"
         )
 
-@app.post("/posts/{post_id}/comments", status_code=status.HTTP_201_CREATED, response_model=dict)
+
+@app.post("/posts/{post_id}/comments", status_code=status.HTTP_201_CREATED, response_model=dict) # ++++++++++++++
 async def create_comment(
         post_id: int = Path(..., gt=0),
         comment: CommentCreate = None,
@@ -575,19 +578,13 @@ async def create_comment(
                 detail="Comment data required"
             )
 
-        post_data = await call_func("get_post", post_id, current_user["user_id"])
-        if not post_data:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Нет прав для комментирования этого поста"
-            )
-
         author_id = current_user["user_id"]
         comment_data = await call_func(
             "create_comment",
             post_id,
             comment.content,
-            author_id
+            author_id,
+            comment.is_private
         )
 
         return {"comment": comment_data}
@@ -606,46 +603,223 @@ async def create_comment(
             detail="Internal server error"
         )
 
-@app.patch("posts/{post_id}/comments/{comment_id}", response_model=dict)
+
+@app.patch("/posts/{post_id}/comments/{comment_id}", response_model=dict) # +++++++++++++
 async def update_comment(
+        post_id: int = Path(..., gt=0),
         comment_id: int = Path(..., gt=0),
-        comment_update: CommentUpdate = None
+        comment_update: CommentUpdate = None,
+        current_user: dict = Depends(get_current_user)
 ):
-    update_data = comment_update.dict()
-    comment_data = await call_func("update_comment", comment_id, update_data)
-    return comment_data
+    """
+    Обновление содержимого комментария.
+    Только автор комментария может обновить его содержимое.
+    """
+    try:
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
 
-@app.patch("posts/{post_id}/comments/{comment_id}/change-status", response_model=dict) # для модераторов
+        if comment_update is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No update data provided"
+            )
+
+        update_data = comment_update.dict()
+        comment_data = await call_func(
+            "update_comment",
+            post_id,
+            comment_id,
+            update_data.get('content'),
+            current_user["user_id"]
+        )
+
+        return {"comment": comment_data}
+
+    except HTTPException:
+        raise
+    except psycopg2.Error as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error)
+        )
+    except Exception as error:
+        print(f"Error in update_comment: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.patch("/posts/{post_id}/comments/{comment_id}/change-status", response_model=dict) # ++++++++++++++
 async def change_comment_status(
+        post_id: int = Path(..., gt=0),
         comment_id: int = Path(..., gt=0),
-        comment_update: CommentUpdate = None
+        status_update: CommentStatusUpdate = None,
+        current_user: dict = Depends(get_current_user)
 ):
-    update_data = comment_update.dict()
-    comment_data = await call_func("update_comment", comment_id, update_data)
-    return comment_data
+    """
+    Изменение статуса комментария.
+    Только для модераторов.
+    """
+    try:
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
 
-@app.delete("posts/{post_id}/comments/{comment_id}", response_model=dict)
+        if status_update is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No status update data provided"
+            )
+
+        comment_data = await call_func(
+            "change_comment_status",
+            post_id,
+            comment_id,
+            status_update.status,
+            current_user["user_id"]
+        )
+
+        return {"comment": comment_data}
+
+    except HTTPException:
+        raise
+    except psycopg2.Error as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error)
+        )
+    except Exception as error:
+        print(f"Error in change_comment_status: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.delete("/posts/{post_id}/comments/{comment_id}", response_model=dict) # +++++++++++++
 async def delete_comment(
+        post_id: int = Path(..., gt=0),
         comment_id: int = Path(..., gt=0),
-        comment_update: CommentUpdate = None
+        current_user: dict = Depends(get_current_user)
 ):
-    update_data = comment_update.dict()
-    comment_data = await call_func("update_comment", comment_id, update_data)
-    return comment_data
+    """
+    Удаление комментария.
+    - Автор может удалять только свои PENDING или PUBLISHED комментарии
+    - Модератор может удалять любые комментарии
+    """
+    try:
+        if not current_user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required"
+            )
 
+        await call_func("delete_comment", post_id, comment_id, current_user["user_id"])
+
+        return {"message": "Комментарий успешно удален"}
+
+    except HTTPException:
+        raise
+    except psycopg2.Error as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error)
+        )
+    except Exception as error:
+        print(f"Error in delete_comment: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.get("/comments/pending", response_model=dict) # ++++++++++++++
+async def get_pending_comments(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(10, ge=1, le=100),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Получение комментариев на проверке.
+    Только для модераторов.
+    """
+    try:
+        user_id = current_user["user_id"]
+
+        comments = await call_func("get_pending_comments", user_id, skip, limit)
+
+        return {"comments": comments}
+
+    except HTTPException:
+        raise
+    except psycopg2.Error as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error)
+        )
+    except Exception as error:
+        print(f"Error in get_pending_comments: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
 # управление пользователями
-@app.get("/users/me/posts")
-async def get_user_posts(current_user: dict = Depends(get_current_user)):
-    user_id = current_user["user_id"]
-    post_data: dict = await call_func("get_user_comments", user_id)
-    return post_data
+@app.get("/users/me/posts", response_model=dict)
+async def get_user_posts(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(10, ge=1, le=100),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Получение всех постов текущего пользователя.
+    Требуется авторизация.
+    """
+    try:
+        user_id = current_user["user_id"]
 
-@app.get("/users/me/comments")
-async def get_user_comments(current_user: dict = Depends(get_current_user)):
-    user_id = current_user["user_id"]
-    post_data: dict = await call_func("get_user_comments", user_id)
-    return post_data
+        post_data = await call_func("get_user_posts", user_id, skip, limit)
+
+        return {"posts": post_data}
+
+    except Exception as error:
+        print(f"Error in get_user_posts: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@app.get("/users/me/comments", response_model=dict)
+async def get_user_comments(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(10, ge=1, le=100),
+        current_user: dict = Depends(get_current_user)
+):
+    """
+    Получение всех комментариев текущего пользователя.
+    Требуется авторизация.
+    """
+    try:
+        user_id = current_user["user_id"]
+
+        comment_data = await call_func("get_user_comments", user_id, skip, limit)
+
+        return {"comments": comment_data}
+
+    except Exception as error:
+        print(f"Error in get_user_comments: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
 
 
 from fastapi.middleware.cors import CORSMiddleware

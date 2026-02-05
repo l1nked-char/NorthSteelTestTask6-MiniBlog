@@ -4,7 +4,7 @@ import psycopg2
 from api.config import Config
 
 
-def connect_db():
+async def connect_db():
     try:
         conn = psycopg2.connect(**Config.DB_CONFIG)
         return conn
@@ -16,7 +16,7 @@ async def call_func(func_name: str, *args):
     conn = None
     cursor = None
     try:
-        conn = connect_db()
+        conn = await connect_db()
         if not conn:
             return None
 
